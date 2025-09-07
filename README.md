@@ -1,1 +1,6 @@
-# hkdfzmys.github.io
+# 漫研社
+Welcome to 河南科技大学附属高级中学-漫研社
+
+
+## 说明
+- 💦代码💩山，勿细看！
