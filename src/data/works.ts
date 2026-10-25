@@ -1,0 +1,3 @@
+export interface Work {id:string;title:string;author:string;category:string;image:string;description:string;example:boolean}
+const names = ['06a42ea01994bc3f97640dd138fdb4b9','11dcd7d3ea93416ea78ce3c2f766c42a','52880636e969248c4fcddbf2b443a57e','561005d0ed417cdca354cc3ff0decdfa','b2455ff78ddaaa8eaa22973ea95f7317','e82c8fd9b43a0d181cf1858b6c6351aa'];
+export const works: Work[] = names.map((name,i)=>({id:`art-${i+1}`, title:`灵感切片 · ${String(i+1).padStart(2,'0')}`,author:'作者待署名',category:'绘画',image:`images/artworks/${name}.png`,description:'用户提供的绘画素材，作为作品墙示例展示。作品正式名称、作者署名与创作说明可由维护者在统一数据文件中补充。',example:true}));

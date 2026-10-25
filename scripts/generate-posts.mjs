@@ -1,0 +1,33 @@
+import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import matter from 'gray-matter';
+import { marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
+const includeDrafts = process.argv.includes('--drafts');
+const dir = resolve('content/posts');
+await mkdir(dir, { recursive: true });
+const files = (await readdir(dir)).filter(f => f.endsWith('.md')).sort();
+const posts = [];
+const dateValue = value => value instanceof Date ? value.toISOString().slice(0,10) : String(value || '');
+for (const file of files) {
+  const { data, content } = matter(await readFile(resolve(dir, file), 'utf8'));
+  for (const key of ['title', 'date', 'summary', 'category', 'author']) if (!data[key]) throw new Error(`${file}: 缺少 ${key}`);
+  const date = dateValue(data.date), updated = dateValue(data.updated || data.date);
+  if (![date, updated].every(v => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)))) throw new Error(`${file}: 日期格式应为 YYYY-MM-DD`);
+  if (data.tags && (!Array.isArray(data.tags) || data.tags.some(v => typeof v !== 'string'))) throw new Error(`${file}: tags 必须是文字数组`);
+  for (const key of ['draft', 'featured']) if (data[key] !== undefined && typeof data[key] !== 'boolean') throw new Error(`${file}: ${key} 必须是 true 或 false`);
+  if (data.draft && !includeDrafts) continue;
+  const slug = file.replace(/\.md$/, '');
+  const rawHtml = marked.parse(content, { gfm: true });
+  let html = sanitizeHtml(rawHtml, { allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'figure', 'figcaption']), allowedAttributes: { a: ['href','title'], img: ['src','alt','title','width','height','loading','decoding'], code: ['class'] }, allowedSchemes: ['http','https','mailto'], transformTags: { img: (tagName, attribs) => ({tagName, attribs:{...attribs,loading:'lazy',decoding:'async'}}) }, allowedClasses: { code: ['language-*'] } });
+  const toc = []; let counter = 0;
+  html = html.replace(/<h([23])>([\s\S]*?)<\/h\1>/g, (_, level, title) => { const id = `section-${++counter}`; toc.push({id, level: Number(level), text: title.replace(/<[^>]+>/g,'')}); return `<h${level} id="${id}">${title}</h${level}>`; });
+  const plain = content.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/[#*`>\[\]]/g,' ').trim();
+  posts.push({slug, title:String(data.title), date, updated, summary:String(data.summary), cover:String(data.cover || ''), category:String(data.category), tags:data.tags || [], author:String(data.author), featured:Boolean(data.featured), draft:Boolean(data.draft), html, toc, searchText:plain, readingMinutes:Math.max(1, Math.ceil(plain.length / 450)), previous:null, next:null});
+}
+posts.sort((a,b) => b.date.localeCompare(a.date) || a.slug.localeCompare(b.slug));
+posts.forEach((p,i) => { p.previous = posts[i+1] ? {slug:posts[i+1].slug,title:posts[i+1].title} : null; p.next = posts[i-1] ? {slug:posts[i-1].slug,title:posts[i-1].title} : null; });
+const data = { posts, categories:[...new Set(posts.map(p=>p.category))], tags:[...new Set(posts.flatMap(p=>p.tags))], years:[...new Set(posts.map(p=>p.date.slice(0,4)))].sort().reverse() };
+await mkdir(resolve('src/generated'), {recursive:true});
+await writeFile(resolve('src/generated/posts.json'), JSON.stringify(data, null, 2));
+console.log(`Markdown: 已生成 ${posts.length} 篇文章${includeDrafts ? '（包含本地草稿）' : '（生产环境，草稿已过滤）'}`);
